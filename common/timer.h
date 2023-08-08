@@ -23,7 +23,6 @@ public:
   // Stop time measurement
   void Stop() {
     diff_time_ = GetDiffTime();
-    std::cout << "diff time is " << diff_time_ << std::endl;
     total_time_ += diff_time_;
     running_ = false;
     ++clock_sessions_;
@@ -64,8 +63,8 @@ public:
 private:
   inline double GetDiffTime() {
     auto end_time = std::chrono::high_resolution_clock::now();
-    // return std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time_).count();
-    return std::chrono::duration<double, std::milli>(end_time - start_time_).count();
+    return std::chrono::duration<double, std::milli>(end_time - start_time_)
+        .count();
   }
 
 private:

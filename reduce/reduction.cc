@@ -35,8 +35,13 @@ void getNumBlocksAndThreads(int whichKernel, int n, int maxBlocks,
   cudaErrCheck(cudaGetDevice(&device));
   cudaErrCheck(cudaGetDeviceProperties(&prop, device));
 
-  threads = n < maxThreads ? nextPow2(n) : maxThreads;
-  blocks = (n + threads - 1) / threads;
+  if (whichKernel < 3) {
+    threads = n < maxThreads ? nextPow2(n) : maxThreads;
+    blocks = (n + threads - 1) / threads;
+  } else {
+    threads = (n < maxThreads * 2) ? nextPow2((n+1) / 2) : maxThreads;
+    blocks = (n + threads * 2 - 1) / (threads * 2);
+  }
 }
 
 template <typename T>
@@ -72,7 +77,6 @@ T benchmarkReduce(int n, int numThreads, int numBlocks, int maxThreads,
 
     cudaDeviceSynchronize();
     timer.Stop();
-    std::cout << timer.GetTime() << std::endl;
   }
 
   if (needReadBack) {
@@ -150,9 +154,9 @@ template <typename T> bool runTest(int number, int whichKernel) {
                       whichKernel, testIterations, cpuFinalReduction,
                       cpuFinalThreshold, timer, h_odata, d_idata, d_odata);
   double reduceTime = timer.GetAverageTime();
-  std::cout << "Reduction, Throughput = "
+  std::cout << "Reduction, Bandwidth = "
             << size * sizeof(T) * 1e-9 * 1. / (reduceTime * 1e-3)
-            << " GB/s, Time = " << reduceTime << " s, Size = " << size
+            << " GB/s, Time = " << reduceTime << " ms, Size = " << size
             << " Elements" << std::endl;
 
   // compute reference solution
@@ -174,7 +178,7 @@ template <typename T> bool runTest(int number, int whichKernel) {
 int main(int argc, char **argv) {
   std::cout << argv[0] << " Starting...\n" << std::endl;
 
-  int number = 1 << 30;
+  int number = 1 << 26;
   int whichKernel = 0;
   while (1) {
     int option_index = 0;

@@ -8,15 +8,15 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 
-#include <getopt.h>
+//#include <getopt.h>
 #include <iostream>
-#include <unistd.h>
+//#include <unistd.h>
 
-static const struct option long_opts[] = {
-    {"number", required_argument, NULL, 'n'},
-    {"which", required_argument, NULL, 'w'},
-    {"help", no_argument, NULL, 'h'},
-    {NULL, 0, NULL, 0}};
+//static const struct option long_opts[] = {
+//    {"number", required_argument, NULL, 'n'},
+//    {"which", required_argument, NULL, 'w'},
+//    {"help", no_argument, NULL, 'h'},
+//    {NULL, 0, NULL, 0}};
 
 unsigned int nextPow2(unsigned int x) {
   --x;
@@ -41,6 +41,10 @@ void getNumBlocksAndThreads(int whichKernel, int n, int maxBlocks,
   } else {
     threads = (n < maxThreads * 2) ? nextPow2((n+1) / 2) : maxThreads;
     blocks = (n + threads * 2 - 1) / (threads * 2);
+  }
+
+  if (whichKernel == 6) {
+      blocks = maxBlocks < blocks ? maxBlocks : blocks;
   }
 }
 
@@ -73,6 +77,34 @@ T benchmarkReduce(int n, int numThreads, int numBlocks, int maxThreads,
       }
 
       needReadBack = false;
+    }
+    else {
+        // sum partial block sums on GPU
+        int s = numBlocks;
+        int kernel = whichKernel;
+
+        while (s > cpuFinalThreshold) {
+            int threads = 0, blocks = 0;
+            getNumBlocksAndThreads(kernel, s, maxBlocks, maxThreads, blocks, threads);
+            cudaErrCheck(cudaMemcpy(d_intermediateSums, d_odata, s * sizeof(T), cudaMemcpyDeviceToDevice));
+            reduce<T>(s, threads, blocks, kernel, d_intermediateSums, d_odata);
+
+            if (kernel < 3) {
+                s = (s + threads - 1) / threads;
+            }
+            else {
+                s = (s + (threads * 2 - 1)) / (threads * 2);
+            }
+        }
+
+        if (s > 1) {
+            // copy result from device to host
+            cudaErrCheck(cudaMemcpy(h_odata, d_odata, s * sizeof(T), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < s; ++i) {
+                gpu_result += h_odata[i];
+            }
+            needReadBack = false;
+        }
     }
 
     cudaDeviceSynchronize();
@@ -112,7 +144,7 @@ T reduceCPU(T* data, int size) {
 
 template <typename T> bool runTest(int number, int whichKernel) {
   int size = number;
-  int maxThreads = 1024;
+  int maxThreads = 512;
   bool cpuFinalReduce = true;
 
   T *h_idata = (T *)malloc(size * sizeof(T));
@@ -123,7 +155,7 @@ template <typename T> bool runTest(int number, int whichKernel) {
   int numBlocks = 0;
   int numThreads = 0;
 
-  int maxBlocks = 64;
+  int maxBlocks = 65535;
   getNumBlocksAndThreads(whichKernel, size, maxBlocks, maxThreads, numBlocks,
                          numThreads);
   std::cout << "numBlocks = " << numBlocks << ", numThreads = " << numThreads << std::endl;
@@ -146,7 +178,7 @@ template <typename T> bool runTest(int number, int whichKernel) {
   int testIterations = 100;
   StopWatchTimer timer;
 
-  bool cpuFinalReduction = true;
+  bool cpuFinalReduction = false;
   int cpuFinalThreshold = 1024;
 
   T gpu_result =
@@ -178,26 +210,28 @@ template <typename T> bool runTest(int number, int whichKernel) {
 int main(int argc, char **argv) {
   std::cout << argv[0] << " Starting...\n" << std::endl;
 
-  int number = 1 << 26;
+  int number = 1 << 25;
   int whichKernel = 0;
-  while (1) {
-    int option_index = 0;
-    int c = getopt_long(argc, argv, "n:w:h", long_opts, &option_index);
-    if (c == -1)
-      break;
-    switch (c) {
-    case 'n':
-      number = atoi(optarg);
-      break;
-    case 'w':
-      whichKernel = atoi(optarg);
-      break;
-    case 'h':
-      break;
-    default:
-      abort();
-    }
-  }
+  //while (1) {
+  //  int option_index = 0;
+  //  int c = getopt_long(argc, argv, "n:w:h", long_opts, &option_index);
+  //  if (c == -1)
+  //    break;
+  //  switch (c) {
+  //  case 'n':
+  //    number = atoi(optarg);
+  //    break;
+  //  case 'w':
+  //    whichKernel = atoi(optarg);
+  //    break;
+  //  case 'h':
+  //    break;
+  //  default:
+  //    abort();
+  //  }
+  //}
+
+  whichKernel = atoi(argv[1]);
 
   std::cout << "number: " << number << std::endl;
   std::cout << "which_kernel: " << whichKernel << std::endl;

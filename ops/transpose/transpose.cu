@@ -5,7 +5,7 @@
 
 const int TILE_DIM = 32;
 const int BLOCK_ROWS = 8;
-const int NUM_REPS = 100;
+const int NUM_REPS = 1;
 
 // Check erros and print GB/s
 void PostProcess(const float *ref, const float *res, int n, float ms) {
@@ -47,7 +47,7 @@ __global__ void CopySharedMem(T *out_data, const T *in_data) {
   int width = gridDim.x * TILE_DIM;
 
   for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
-    tile[(threadIdx.y + j)][threadIdx.x] = in_data[(y + j) * width + x];
+    tile[threadIdx.y + j][threadIdx.x] = in_data[(y + j) * width + x];
   }
 
   __syncthreads();

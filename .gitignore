@@ -39,3 +39,8 @@
 
 *.csv
 *.json
+
+.cache/
+.clangd/
+
+build/

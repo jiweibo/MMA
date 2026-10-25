@@ -42,5 +42,6 @@
 
 .cache/
 .clangd/
+.clangd
 
 build/
